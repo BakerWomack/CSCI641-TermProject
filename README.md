@@ -69,14 +69,12 @@ A containerized Zero Trust Architecture (ZTA) demonstrating policy-based access 
 - [ ] Generate self-signed TLS certificates for HTTPS (port 443)
 - [ ] Mount `nginx.conf` and certs into the container
 - [ ] Set up `depends_on` for policy-engine and app-service
-- [ ] Add health check endpoint
 
 ### App Service (`app-service/`)
 - [ ] Implement `/api/data` GET/POST endpoints (business logic)
 - [ ] Connect to `secure-db` for persistent storage
 - [ ] Add environment variable configuration (DB host, credentials)
 - [ ] Add `requirements.txt` dependencies (Flask, psycopg2, requests)
-- [ ] Add `/health` endpoint
 - [ ] Write unit tests
 
 ### Secure Database (`secure-db/`)
@@ -93,13 +91,10 @@ A containerized Zero Trust Architecture (ZTA) demonstrating policy-based access 
 - [ ] Add persistent volume for data
 - [ ] Set up log ingestion from other services (Filebeat / Fluentd / direct HTTP)
 - [ ] Create index templates for security events
-- [ ] Add health check
 
 ### Docker Compose (`docker-compose.yml`)
 - [ ] Add `environment:` blocks with credentials and config for each service
 - [ ] Add `volumes:` for database persistence and config mounts
-- [ ] Add `healthcheck:` directives for service readiness
-- [ ] Use `depends_on:` with `condition: service_healthy` for proper startup order
 - [ ] Pin Elasticsearch to a specific image version
 - [ ] Add `.env` file for secrets
 
