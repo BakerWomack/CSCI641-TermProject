@@ -1,0 +1,76 @@
+services:
+
+  # Control Plane
+  policy-engine:
+    build: ./policy-engine
+    image: policy-engine:latest
+    container_name: policy-engine
+    ports:
+      - "8080:8080"
+    networks:
+      - control_net
+      - frontend_net
+    depends_on:
+      - asset-db
+      - idp-oidc
+
+  idp-oidc:
+    build: ./idp-oidc
+    image: idp-oidc:latest
+    container_name: idp-oidc
+    ports:
+      - "8081:8081"
+    networks:
+      - control_net
+
+  asset-db:
+    image: postgres:15-alpine
+    container_name: asset-db
+    ports:
+      - "5432:5432"
+    networks:
+      - control_net
+
+  # Front End
+  web-server-pep:
+    image: nginx:latest
+    container_name: web-server-pep
+    networks:
+      - frontend_net
+    ports:
+      - "443:443"
+
+  # Backend
+  app-service:
+    build: ./app-service
+    image: app-service:latest
+    container_name: app-service
+    networks:
+      - backend_net
+      - frontend_net
+
+  secure-db:
+    image: postgres:15-alpine
+    container_name: secure-db
+    networks:
+      - backend_net
+
+  # SIEM
+  siem:
+    image: elasticsearch:latest
+    container_name: siem
+    ports:
+      - "9000:9000"
+    networks:
+      - siem_net
+      - control_net
+      - frontend_net
+      - backend_net
+
+networks:
+  control_net:
+    internal: true
+  frontend_net:
+  backend_net:
+    internal: true
+  siem_net:
