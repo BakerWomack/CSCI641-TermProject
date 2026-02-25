@@ -13,6 +13,8 @@ services:
     depends_on:
       - asset-db
       - idp-oidc
+    environment:
+      - TRUST_THRESHOLD=0.8
 
   idp-oidc:
     build: ./idp-oidc
