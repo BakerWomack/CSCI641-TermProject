@@ -1,13 +1,14 @@
 # Policy Engine
 import os
 from time import time
-from urllib import request
-from fastapi import Depends, FastAPI, Request, Response, HTTPException
+import httpx
+from fastapi import Depends, FastAPI, Request, HTTPException
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy import text
 
 TRUST_THRESHOLD = int(os.getenv("TRUST_THRESHOLD", "75"))
+IDP_URL = os.getenv("IDP_URL", "http://idp-oidc:8081")
 
 DATABASE_URL = "postgresql+asyncpg://postgres:postgres@asset-db:5432/postgres"
 engine = create_async_engine(DATABASE_URL)
@@ -17,10 +18,9 @@ async def get_db():
     async with AsyncSessionLocal() as session:
         yield session
 
-async def calculate_trust_score(client_ip: str, target_url: str, device_id: str, client_id: str) -> int:
+async def calculate_trust_score(client_ip: str, target_url: str, device_id: str, client_id: str, db: AsyncSession) -> int:
 
     score = 0
-    db = get_db()
     if db is None:
         return 0
     
@@ -60,34 +60,59 @@ async def calculate_trust_score(client_ip: str, target_url: str, device_id: str,
                 last_seen = :now
             WHERE client_id = :client_id
         """)
-        
-    await db.execute(update_stmt, {
-        "dev": device_id,
-        "ip": client_ip,
-        "url": target_url,
-        "now": int(time()),
-        "client_id": client_id
-    })
-    await db.commit()
+        await db.execute(update_stmt, {
+            "dev": device_id,
+            "ip": client_ip,
+            "url": target_url,
+            "now": int(time()),
+            "client_id": client_id
+        })
+        await db.commit()
 
     return score
 
 
 app = FastAPI(title="Policy Engine")
 
-# Evaluate
-@app.get("/evaluate")
-async def evaluate(request: Request, db: AsyncSession = Depends(get_db)):
+@app.post("/authenticate")
+async def authenticate(request: Request, db: AsyncSession = Depends(get_db)):
+    body = await request.body()
+    async with httpx.AsyncClient() as client:
+        idp_resp = await client.post(
+            f"{IDP_URL}/authenticate",
+            headers=dict(request.headers),
+            content=body,
+        )
+
+    if idp_resp.status_code != 200:
+        raise HTTPException(idp_resp.status_code, idp_resp.json().get("detail", "Authentication failed"))
+
+    idp_data = idp_resp.json()
+    client_id = idp_data["client_id"]
+
     client_ip = request.headers.get("X-Real-IP", "unknown")
     target_url = request.headers.get("X-Target-URL", "unknown")
     device_id = request.headers.get("X-Device-ID", "unknown")
-    client_id = request.headers.get("X-Client-ID", "unknown")
 
-    trust_score = await calculate_trust_score(client_ip, target_url, device_id, client_id)
+    trust_score = await calculate_trust_score(client_ip, target_url, device_id, client_id, db)
     if trust_score < TRUST_THRESHOLD:
-        raise HTTPException(status_code=403, detail="Access denied by policy engine")
+        raise HTTPException(403, "Access denied by policy engine")
 
-    return {"status": "success", "score": trust_score}
+    async with httpx.AsyncClient() as client:
+        req_body = await request.json() if body else {}
+        token_resp = await client.post(
+            f"{IDP_URL}/token",
+            data={
+                "grant_type": "client_credentials",
+                "client_id": client_id,
+                "client_secret": req_body.get("client_secret", ""),
+            },
+        )
+
+    if token_resp.status_code != 200:
+        raise HTTPException(500, "Failed to issue token")
+
+    return token_resp.json()
 
 if __name__ == "__main__":
     import uvicorn

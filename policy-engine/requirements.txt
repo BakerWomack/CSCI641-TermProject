@@ -4,3 +4,6 @@ sqlalchemy
 asyncpg
 psycopg2-binary
 pydantic-settings
+PyJWT[crypto]
+httpx
+cryptography
