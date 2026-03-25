@@ -1,6 +1,6 @@
 import os
 import httpx
-from fastapi import Depends, HTTPException
+from fastapi import Depends, HTTPException, Request
 
 
 POLICY_URL = os.getenv("POLICY_URL", "http://policy-engine:8080/authenticate")

@@ -1,6 +1,5 @@
 services:
 
-  # Control Plane
   policy-engine:
     build: ./policy-engine
     image: policy-engine:latest
@@ -15,6 +14,8 @@ services:
       - idp-oidc
     environment:
       - TRUST_THRESHOLD=0.8
+    volumes:
+      - ./internal-certs:/etc/service-certs:ro
 
   idp-oidc:
     build: ./idp-oidc
@@ -24,6 +25,14 @@ services:
       - "8081:8081"
     networks:
       - control_net
+    depends_on:
+      - asset-db
+    environment:
+      - ASSET_DB_HOST=asset-db
+      - ASSET_DB_PORT=5432
+      - ASSET_DB_USER=postgres
+      - ASSET_DB_PASSWORD=postgres
+      - ASSET_DB_NAME=postgres
 
   asset-db:
     image: postgres:15-alpine
@@ -35,11 +44,10 @@ services:
       - POSTGRES_PASSWORD=postgres
       - POSTGRES_DB=postgres
     volumes:
-      - ./asset-db/init.sql:/docker-entrypoint-initdb.d/init.sql
+      - ./asset-db/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
     networks:
       - control_net
 
-  # Front End
   web-server-pep:
     image: nginx:latest
     container_name: web-server-pep
@@ -47,33 +55,68 @@ services:
       - frontend_net
     ports:
       - "443:443"
+    volumes:
+      - ./web-server-pep/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./web-server-pep/html:/usr/share/nginx/html:ro
+      - ./web-server-pep/certs:/etc/nginx/certs:ro
+      - ./internal-certs:/etc/nginx/internal-certs:ro
+    depends_on:
+      - policy-engine
+      - app-service
 
-  # Backend
   app-service:
     build: ./app-service
     image: app-service:latest
     container_name: app-service
+    depends_on:
+      - secure-db
+    environment:
+      - SECURE_DB_HOST=secure-db
+      - SECURE_DB_PORT=5432
+      - SECURE_DB_USER=postgres
+      - SECURE_DB_PASSWORD=postgres
+      - SECURE_DB_NAME=postgres
+      - SECURE_DB_SSLROOTCERT=/etc/service-certs/ca.pem
+      - SECURE_DB_SSLCERT=/etc/service-certs/app-db-client.crt
+      - SECURE_DB_SSLKEY=/etc/service-certs/app-db-client.key
+      - APP_TLS_CA_CERTS=/etc/service-certs/ca.pem
+      - APP_TLS_CERTFILE=/etc/service-certs/app-service.crt
+      - APP_TLS_KEYFILE=/etc/service-certs/app-service.key
     networks:
       - backend_net
       - frontend_net
+    volumes:
+      - ./internal-certs:/etc/service-certs:ro
 
   secure-db:
-    image: postgres:15-alpine
+    build:
+      context: .
+      dockerfile: secure-db/Dockerfile
+    image: secure-db:latest
     container_name: secure-db
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=postgres
+    volumes:
+      - ./secure-db/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
     networks:
       - backend_net
 
-  # SIEM
-  siem:
-    image: elasticsearch:latest
-    container_name: siem
-    ports:
-      - "9000:9000"
-    networks:
-      - siem_net
-      - control_net
-      - frontend_net
-      - backend_net
+  # siem:
+  #   image: docker.elastic.co/elasticsearch/elasticsearch:8.13.4
+  #   container_name: siem
+  #   environment:
+  #     - discovery.type=single-node
+  #     - xpack.security.enabled=false
+  #     - ES_JAVA_OPTS=-Xms512m -Xmx512m
+  #   ports:
+  #     - "9200:9200"
+  #   networks:
+  #     - siem_net
+  #     - control_net
+  #     - frontend_net
+  #     - backend_net
 
 networks:
   control_net:
@@ -81,30 +124,4 @@ networks:
   frontend_net:
   backend_net:
     internal: true
-  siem_net:
-
-  #secure-db
-  secure-db:
-    image: postgres:15
-    container_name: secure-db
-    networks:
-      - backend_net
-    environment:
-      - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=postgres
-      - POSTGRES_DB=postgres
-    volumes:
-      - ./secure-db/init.sql:/docker-entrypoint-initdb.d/init.sql
-
-  #app-service
-  app-service:
-    build: ./app-service
-    image: app-service:latest
-    container_name: app-service
-    networks:
-      - backend_net
-      - frontend_net
-    environment:
-      - SECURE_DB_HOST=secure-db
-      - SECURE_DB_PORT=5432
-      - SECURE_DB_USER=postgres
+  # siem_net:

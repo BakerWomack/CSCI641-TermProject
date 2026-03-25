@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+<head>
+	<meta charset="utf-8" />
+	<meta name="viewport" content="width=device-width, initial-scale=1" />
+	<title>Home</title>
+</head>
+<body>
+	<h1>Protected Data</h1>
+
+	<p>
+		<button id="loadData">Load Protected Data</button>
+	</p>
+
+	<pre id="output"></pre>
+
+	<script>
+		const output = document.getElementById('output');
+		const loadDataBtn = document.getElementById('loadData');
+
+		loadDataBtn.onclick = async () => {
+			const token = localStorage.getItem('access_token');
+			if (!token) {
+				output.textContent = 'No token found in localStorage (access_token).';
+				return;
+			}
+
+			try {
+				const response = await fetch('/api/app/data', {
+					headers: {
+						Authorization: `Bearer ${token}`,
+					},
+				});
+				const text = await response.text();
+				output.textContent = `Status: ${response.status}\n${text}`;
+			} catch (error) {
+				output.textContent = `Request failed: ${error}`;
+			}
+		};
+	</script>
+</body>
+</html>

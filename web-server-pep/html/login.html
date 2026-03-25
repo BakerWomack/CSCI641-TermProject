@@ -1,0 +1,31 @@
+<!doctype html><html><body>
+  <h1>Login</h1>
+  <form id="f"><input id="id" placeholder="client_id"><input id="sec" type="password" placeholder="client_secret"><button>Sign in</button></form>
+  <pre id="out"></pre>
+  <script>
+    f.onsubmit = async (e) => {
+      e.preventDefault();
+      const r = await fetch('/api/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({client_id:id.value,client_secret:sec.value})});
+      const text = await r.text();
+      out.textContent = text;
+
+      if (!r.ok) {
+        return;
+      }
+
+      try {
+        const data = JSON.parse(text);
+        const token = data.access_token;
+        if (!token) {
+          out.textContent = 'Login succeeded but no access_token was returned.';
+          return;
+        }
+
+        localStorage.setItem('access_token', token);
+        window.location.href = '/home';
+      } catch {
+        out.textContent = 'Login succeeded but response was not valid JSON.';
+      }
+    };
+  </script>
+</body></html>
