@@ -9,4 +9,4 @@
 # Editor-based HTTP Client requests
 /httpRequests/
 
-/inspectionProfiles/
+.idea/
