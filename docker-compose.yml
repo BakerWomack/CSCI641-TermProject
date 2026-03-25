@@ -82,3 +82,29 @@ networks:
   backend_net:
     internal: true
   siem_net:
+
+  #secure-db
+  secure-db:
+    image: postgres:15
+    container_name: secure-db
+    networks:
+      - backend_net
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=postgres
+    volumes:
+      - ./secure-db/init.sql:/docker-entrypoint-initdb.d/init.sql
+
+  #app-service
+  app-service:
+    build: ./app-service
+    image: app-service:latest
+    container_name: app-service
+    networks:
+      - backend_net
+      - frontend_net
+    environment:
+      - SECURE_DB_HOST=secure-db
+      - SECURE_DB_PORT=5432
+      - SECURE_DB_USER=postgres
