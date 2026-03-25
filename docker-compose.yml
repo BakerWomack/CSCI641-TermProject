@@ -15,7 +15,7 @@ services:
     environment:
       - TRUST_THRESHOLD=0.8
     volumes:
-      - ./internal-certs:/etc/service-certs:ro
+      - ./internal-certs:/etc/service-certs
 
   idp-oidc:
     build: ./idp-oidc
@@ -86,7 +86,7 @@ services:
       - backend_net
       - frontend_net
     volumes:
-      - ./internal-certs:/etc/service-certs:ro
+      - ./internal-certs:/etc/service-certs
 
   secure-db:
     build:
