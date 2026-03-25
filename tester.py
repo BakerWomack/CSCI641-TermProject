@@ -5,7 +5,7 @@ import requests
 
 BASE_URL = "https://localhost"
 CLIENT_ID = "test-user-001"
-CLIENT_SECRET = "secret000"
+CLIENT_SECRET = "secret001"
 DEVICE_ID = "dev-alice-laptop-001"
 CLIENT_CERT = "web-server-pep/certs/client.crt"
 CLIENT_KEY = "web-server-pep/certs/client.key"
