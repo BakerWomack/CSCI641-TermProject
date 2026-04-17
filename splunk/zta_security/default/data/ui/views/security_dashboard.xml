@@ -1,0 +1,171 @@
+<dashboard version="1.1" theme="dark">
+  <label>ZTA Security Monitor</label>
+
+  <row>
+    <panel>
+      <single>
+        <title>Access Denied (24h)</title>
+        <search>
+          <query>index=main sourcetype=_json event=access_denied | stats count</query>
+          <earliest>-24h@h</earliest>
+          <latest>now</latest>
+        </search>
+        <option name="colorMode">block</option>
+        <option name="rangeColors">["0x53A051","0xF1813F","0xDC4E41"]</option>
+        <option name="rangeValues">[0,1]</option>
+        <option name="refresh.display">progressbar</option>
+        <option name="drilldown">none</option>
+      </single>
+    </panel>
+    <panel>
+      <single>
+        <title>Auth Failures (24h)</title>
+        <search>
+          <query>index=main sourcetype=_json event=auth_failure | stats count</query>
+          <earliest>-24h@h</earliest>
+          <latest>now</latest>
+        </search>
+        <option name="colorMode">block</option>
+        <option name="rangeColors">["0x53A051","0xF1813F","0xDC4E41"]</option>
+        <option name="rangeValues">[0,1]</option>
+        <option name="drilldown">none</option>
+      </single>
+    </panel>
+    <panel>
+      <single>
+        <title>Access Granted (24h)</title>
+        <search>
+          <query>index=main sourcetype=_json event=access_granted | stats count</query>
+          <earliest>-24h@h</earliest>
+          <latest>now</latest>
+        </search>
+        <option name="colorMode">block</option>
+        <option name="rangeColors">["0xDC4E41","0xF1813F","0x53A051"]</option>
+        <option name="rangeValues">[0,1]</option>
+        <option name="drilldown">none</option>
+      </single>
+    </panel>
+    <panel>
+      <single>
+        <title>Tokens Revoked (24h)</title>
+        <search>
+          <query>index=main sourcetype=_json event=token_revoked | stats count</query>
+          <earliest>-24h@h</earliest>
+          <latest>now</latest>
+        </search>
+        <option name="colorMode">block</option>
+        <option name="rangeColors">["0x53A051","0xF1813F","0xDC4E41"]</option>
+        <option name="rangeValues">[0,1]</option>
+        <option name="drilldown">none</option>
+      </single>
+    </panel>
+    <panel>
+      <single>
+        <title>Credential Stuffing Attempts (24h)</title>
+        <search>
+          <query>index=main sourcetype=_json event=auth_failure reason=bad_secret | stats count</query>
+          <earliest>-24h@h</earliest>
+          <latest>now</latest>
+        </search>
+        <option name="colorMode">block</option>
+        <option name="rangeColors">["0x53A051","0xF1813F","0xDC4E41"]</option>
+        <option name="rangeValues">[0,1]</option>
+        <option name="drilldown">none</option>
+      </single>
+    </panel>
+  </row>
+
+  <row>
+    <panel>
+      <chart>
+        <title>Security Events Over Time</title>
+        <search>
+          <query>index=main sourcetype=_json | timechart span=1m count by event</query>
+          <earliest>-1h@m</earliest>
+          <latest>now</latest>
+        </search>
+        <option name="charting.chart">line</option>
+        <option name="charting.legend.placement">bottom</option>
+        <option name="charting.axisTitleX.visibility">collapsed</option>
+        <option name="charting.chart.nullValueMode">connect</option>
+        <option name="refresh.display">progressbar</option>
+      </chart>
+    </panel>
+  </row>
+
+  <row>
+    <panel>
+      <chart>
+        <title>Event Type Breakdown</title>
+        <search>
+          <query>index=main sourcetype=_json | stats count by event | sort -count</query>
+          <earliest>-24h@h</earliest>
+          <latest>now</latest>
+        </search>
+        <option name="charting.chart">pie</option>
+        <option name="charting.legend.placement">right</option>
+      </chart>
+    </panel>
+    <panel>
+      <chart>
+        <title>Trust Scores on Denied Requests</title>
+        <search>
+          <query>index=main sourcetype=_json event=access_denied | stats count by score | sort score</query>
+          <earliest>-24h@h</earliest>
+          <latest>now</latest>
+        </search>
+        <option name="charting.chart">bar</option>
+        <option name="charting.axisTitleX.text">Trust Score</option>
+        <option name="charting.axisTitleY.text">Count</option>
+      </chart>
+    </panel>
+    <panel>
+      <chart>
+        <title>Denied Requests by Device</title>
+        <search>
+          <query>index=main sourcetype=_json event=access_denied | stats count by device_id | sort -count</query>
+          <earliest>-24h@h</earliest>
+          <latest>now</latest>
+        </search>
+        <option name="charting.chart">bar</option>
+      </chart>
+    </panel>
+  </row>
+
+  <row>
+    <panel>
+      <table>
+        <title>Recent Alerts</title>
+        <search>
+          <query>index=main sourcetype=_json (event=access_denied OR event=auth_failure OR event=token_revoked) | eval severity=case(event="token_revoked","HIGH",event="access_denied","MEDIUM",event="auth_failure","LOW",true(),"INFO") | table _time severity service event client_id device_id client_ip score reason | sort -_time | head 100</query>
+          <earliest>-24h@h</earliest>
+          <latest>now</latest>
+        </search>
+        <option name="wrap">true</option>
+        <option name="rowNumbers">false</option>
+        <option name="dataOverlayMode">none</option>
+        <format type="color" field="severity">
+          <colorPalette type="map">{"HIGH":#DC4E41,"MEDIUM":#F1813F,"LOW":#F8BE34,"INFO":#53A051}</colorPalette>
+        </format>
+        <format type="color" field="event">
+          <colorPalette type="map">{"access_denied":#F1813F,"auth_failure":#F8BE34,"token_revoked":#DC4E41}</colorPalette>
+        </format>
+      </table>
+    </panel>
+  </row>
+
+  <row>
+    <panel>
+      <table>
+        <title>All Events (Live)</title>
+        <search>
+          <query>index=main sourcetype=_json | table _time service event client_id device_id client_ip score mtls reason | sort -_time | head 200</query>
+          <earliest>-1h@m</earliest>
+          <latest>now</latest>
+        </search>
+        <option name="refresh.auto.interval">10</option>
+        <option name="refresh.display">progressbar</option>
+      </table>
+    </panel>
+  </row>
+</dashboard>

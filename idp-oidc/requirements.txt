@@ -4,3 +4,4 @@ cryptography
 PyJWT[crypto]
 psycopg2-binary
 python-multipart
+httpx

@@ -1,9 +1,9 @@
-# App Service
 import os
 import ssl
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from db import get_db_connection
 from auth import POLICY_URL
+from siem import send_log_async
 
 app = FastAPI()
 
@@ -17,19 +17,28 @@ def home():
 
 @app.get("/app/data")
 @app.get("/api/app/data")
-def get_data():
+async def get_data(request: Request):
+    client_ip = request.headers.get("X-Real-IP", request.client.host)
+    client_dn = request.headers.get("X-Client-DN", "unknown")
+
     conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute("SELECT * FROM sensitive_data;")
-    data = cursor.fetchall()
-    cursor.close()
+    cur = conn.cursor()
+    cur.execute("SELECT * FROM sensitive_data;")
+    data = cur.fetchall()
+    cur.close()
     conn.close()
+
+    await send_log_async("data_access", {
+        "client_ip": client_ip,
+        "client_dn": client_dn,
+        "records": len(data),
+    })
+
     return {"data": data}
 
 
 if __name__ == "__main__":
     import uvicorn
-
     uvicorn.run(
         "main:app",
         host="0.0.0.0",

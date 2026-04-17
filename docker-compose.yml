@@ -9,11 +9,15 @@ services:
     networks:
       - control_net
       - frontend_net
+      - siem_net
     depends_on:
       - asset-db
       - idp-oidc
+      - splunk
     environment:
-      - TRUST_THRESHOLD=0.8
+      - TRUST_THRESHOLD=105
+      - SERVICE_NAME=policy-engine
+      - SIEM_URL=http://splunk:8088
     volumes:
       - ./internal-certs:/etc/service-certs
 
@@ -25,14 +29,18 @@ services:
       - "8081:8081"
     networks:
       - control_net
+      - siem_net
     depends_on:
       - asset-db
+      - splunk
     environment:
       - ASSET_DB_HOST=asset-db
       - ASSET_DB_PORT=5432
       - ASSET_DB_USER=postgres
       - ASSET_DB_PASSWORD=postgres
       - ASSET_DB_NAME=postgres
+      - SERVICE_NAME=idp-oidc
+      - SIEM_URL=http://splunk:8088
 
   asset-db:
     image: postgres:15-alpine
@@ -68,8 +76,11 @@ services:
     build: ./app-service
     image: app-service:latest
     container_name: app-service
+    ports:
+      - "8000:8000"
     depends_on:
       - secure-db
+      - splunk
     environment:
       - SECURE_DB_HOST=secure-db
       - SECURE_DB_PORT=5432
@@ -82,9 +93,12 @@ services:
       - APP_TLS_CA_CERTS=/etc/service-certs/ca.pem
       - APP_TLS_CERTFILE=/etc/service-certs/app-service.crt
       - APP_TLS_KEYFILE=/etc/service-certs/app-service.key
+      - SERVICE_NAME=app-service
+      - SIEM_URL=http://splunk:8088
     networks:
       - backend_net
       - frontend_net
+      - siem_net
     volumes:
       - ./internal-certs:/etc/service-certs
 
@@ -103,20 +117,22 @@ services:
     networks:
       - backend_net
 
-  # siem:
-  #   image: docker.elastic.co/elasticsearch/elasticsearch:8.13.4
-  #   container_name: siem
-  #   environment:
-  #     - discovery.type=single-node
-  #     - xpack.security.enabled=false
-  #     - ES_JAVA_OPTS=-Xms512m -Xmx512m
-  #   ports:
-  #     - "9200:9200"
-  #   networks:
-  #     - siem_net
-  #     - control_net
-  #     - frontend_net
-  #     - backend_net
+  splunk:
+    image: splunk/splunk:latest
+    container_name: splunk
+    environment:
+      - SPLUNK_START_ARGS=--accept-license
+      - SPLUNK_GENERAL_TERMS=--accept-sgt-current-at-splunk-com
+      - SPLUNK_PASSWORD=Admin1234!
+      - SPLUNK_HEC_TOKEN=security-hec-token
+      - SPLUNK_HEC_SSL=false
+    ports:
+      - "8001:8000"
+    volumes:
+      - ./splunk/zta_security:/opt/splunk/etc/apps/zta_security
+    networks:
+      - siem_net
+      - frontend_net
 
 networks:
   control_net:
@@ -124,4 +140,5 @@ networks:
   frontend_net:
   backend_net:
     internal: true
-  # siem_net:
+  siem_net:
+    internal: true
