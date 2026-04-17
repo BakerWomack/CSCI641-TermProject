@@ -296,4 +296,10 @@ cryptography
 
 ## AI Assistance Disclosure
 
-This README and the Splunk security dashboard (`splunk/zta_security/`) were created with the assistance of **Claude** (Anthropic, model `claude-sonnet-4-6`), an AI assistant, as part of an academic project for **CSCI-641, Spring 2026**. All architectural decisions, implementation choices, and testing were performed by the project author. AI assistance was used for document drafting and Splunk dashboard SPL query generation.
+The following were created with the assistance of **Claude** (Anthropic, model `claude-sonnet-4-6`), an AI assistant, as part of an academic project for **CSCI-641, Spring 2026**:
+
+- `README.md` — document drafting
+- `gen_certs.py` — certificate generation script using the `cryptography` library
+- `splunk/zta_security/` — Splunk app and SPL dashboard queries
+
+All architectural decisions, implementation choices, and testing were performed by the project author.
