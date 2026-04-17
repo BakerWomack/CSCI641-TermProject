@@ -123,6 +123,7 @@ services:
     environment:
       - SPLUNK_START_ARGS=--accept-license
       - SPLUNK_GENERAL_TERMS=--accept-sgt-current-at-splunk-com
+      # Username = Admin
       - SPLUNK_PASSWORD=Admin1234!
       - SPLUNK_HEC_TOKEN=security-hec-token
       - SPLUNK_HEC_SSL=false
