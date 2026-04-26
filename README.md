@@ -198,7 +198,15 @@ The attacker physically compromised the victim's device and extracted the client
 The attacker obtained credentials via phishing or a data breach and has a valid CA-signed client certificate, but is connecting from their own machine with an unrecognized device ID. Missing the device factor drops the score to 100, which falls below the 105 threshold. The policy engine returns 403.
 
 ### Attack 4: JWT URL Scanning
-The attacker obtains a valid JWT and attempts to enumerate hidden API endpoints from an unregistered device. Each probe is scored independently — an unknown device combined with an unknown URL scores 75, which is blocked with 403. The first blocked probe also triggers **immediate JWT revocation**, so all subsequent probes return 401 even if the attacker later switches to a known device.
+The attacker uses valid credentials and a valid device to obtain a JWT, then pivots into web scanning to enumerate common internal API paths that a normal user would not reach. The probe list includes:
+
+- `/api/admin`
+- `/api/users`
+- `/api/config`
+- `/api/internal`
+- `/api/debug`
+
+The PEP records each suspicious URL attempt for that client, lowers the URL trust component on repeated probes, and eventually revokes the JWT once the total score falls below threshold. After revocation, later probes return 401 even if the attacker keeps using the same valid device.
 
 ---
 

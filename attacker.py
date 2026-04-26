@@ -126,23 +126,23 @@ def jwt_url_scanning():
     scan_session.verify = CA_CERT
     scan_session.headers.update({
         "Authorization": f"Bearer {token}",
-        "X-Device-ID": "attacker-laptop-kali",
+        "X-Device-ID": KNOWN_DEVICE,
     })
 
-    scan_targets = [
-        "/api/admin",
-        "/api/users",
-        "/api/config",
-        "/api/internal",
-        "/api/debug",
+    scan_plan = [
+        (KNOWN_DEVICE, "/api/users"),
+        (KNOWN_DEVICE, "/api/config"),
+        (KNOWN_DEVICE, "/api/internal"),
+        (KNOWN_DEVICE, "/api/debug"),
     ]
 
-    for url in scan_targets:
+    for device_id, url in scan_plan:
+        scan_session.headers.update({"X-Device-ID": device_id})
         try:
             r = scan_session.get(f"{BASE_URL}{url}", timeout=10)
-            print(f"  probe {url} -> {r.status_code}", end="")
+            print(f"  probe {url} [{device_id}] -> {r.status_code}", end="")
         except requests.exceptions.RequestException as e:
-            print(f"  probe {url} -> error: {e}")
+            print(f"  probe {url} [{device_id}] -> error: {e}")
 
 
 print(f"target: {BASE_URL}")

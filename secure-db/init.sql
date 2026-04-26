@@ -1,6 +1,3 @@
--- secure-db init
-
--- ACCOUNTS (business profile data only; no login secrets)
 CREATE TABLE IF NOT EXISTS accounts (
     id SERIAL PRIMARY KEY,
     client_id TEXT UNIQUE NOT NULL,
@@ -10,7 +7,6 @@ CREATE TABLE IF NOT EXISTS accounts (
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
--- SENSITIVE DATA
 CREATE TABLE IF NOT EXISTS sensitive_data (
     id SERIAL PRIMARY KEY,
     account_id INT REFERENCES accounts(id) ON DELETE SET NULL,
@@ -19,12 +15,9 @@ CREATE TABLE IF NOT EXISTS sensitive_data (
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
--- INDEXES
 CREATE INDEX IF NOT EXISTS idx_accounts_client_id ON accounts(client_id);
 CREATE INDEX IF NOT EXISTS idx_sensitive_data_account ON sensitive_data(account_id);
 
--- SEED DATA
--- Accounts (idempotent via unique client_id)
 INSERT INTO accounts (client_id, display_name, email, role)
 VALUES
 ('test-user-001', 'Alice Admin', 'alice@example.com', 'admin'),
@@ -32,7 +25,6 @@ VALUES
 ('test-user-003', 'Carol User', 'carol@example.com', 'user')
 ON CONFLICT (client_id) DO NOTHING;
 
--- Sensitive data (idempotent by content)
 INSERT INTO sensitive_data (account_id, data, classification)
 SELECT a.id, v.data, v.classification
 FROM (

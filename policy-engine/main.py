@@ -14,9 +14,13 @@ TRUST_THRESHOLD = int(_val * 100) if _val <= 1.0 else int(_val)
 
 IDP_URL = os.getenv("IDP_URL", "http://idp-oidc:8081")
 DB_URL = "postgresql+asyncpg://postgres:postgres@asset-db:5432/postgres"
+URL_PENALTY_STEP = 5
+URL_BASE_SCORE = 25
+URL_SUSPICIOUS_PENALTY = 35
 
 engine = create_async_engine(DB_URL)
 SessionLocal = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+app = FastAPI()
 
 async def get_db():
     async with SessionLocal() as session:
@@ -34,11 +38,12 @@ async def score_request(client_ip, target_url, device_id, client_id, db):
     user = res.mappings().first()
     hour = int(time()) // 3600 % 24
     now = int(time())
+    suspicious_attempts = int(user["suspicious_url_attempts"] or 0) if user is not None else 0
 
     if user is None:
         await db.execute(text("""
-            INSERT INTO users (client_id, device_ids, client_ips, common_urls, common_time_of_access, last_seen)
-            VALUES (:client_id, :device_ids, :client_ips, :common_urls, :common_time_of_access, :now)
+            INSERT INTO users (client_id, device_ids, client_ips, common_urls, common_time_of_access, last_seen, suspicious_url_attempts, suspicious_urls)
+            VALUES (:client_id, :device_ids, :client_ips, :common_urls, :common_time_of_access, :now, 0, ARRAY[]::TEXT[])
             ON CONFLICT (client_id) DO UPDATE
             SET
                 device_ids = ARRAY(SELECT DISTINCT unnest(array_append(users.device_ids, :dev))),
@@ -55,14 +60,14 @@ async def score_request(client_ip, target_url, device_id, client_id, db):
             "dev": device_id, "ip": client_ip, "url": target_url, "hour": hour, "now": now,
         })
         await db.commit()
-        return 100
+        return 100, 0, False
 
     devices = user["device_ids"] or []
     ips = user["client_ips"] or []
     urls = user["common_urls"] or []
     hours = user["common_time_of_access"] or []
+    suspicious_urls = user["suspicious_urls"] or []
 
-    # no baseline yet, just record and let them through
     if not (devices or ips or urls or hours):
         await db.execute(text("""
             UPDATE users SET
@@ -74,35 +79,60 @@ async def score_request(client_ip, target_url, device_id, client_id, db):
             WHERE client_id = :client_id
         """), {"dev": device_id, "ip": client_ip, "url": target_url, "hour": hour, "now": now, "client_id": client_id})
         await db.commit()
-        return 100
+        return 100, 0, False
 
     score = 0
     if device_id in devices:
         score += 30
     if client_ip in ips:
         score += 25
-    if target_url in urls:
-        score += 25
     if hour in hours:
         score += 25
 
+    is_suspicious_url = target_url not in urls
+
+    if not is_suspicious_url:
+        url_score = URL_BASE_SCORE
+        if suspicious_attempts:
+            await db.execute(text("""
+                UPDATE users SET
+                    suspicious_url_attempts = 0,
+                    last_seen = :now
+                WHERE client_id = :client_id
+            """), {"now": now, "client_id": client_id})
+            await db.commit()
+    else:
+        suspicious_attempts += 1
+        if suspicious_attempts == 1:
+            url_score = 0
+        else:
+            url_score = -min(URL_SUSPICIOUS_PENALTY + max(suspicious_attempts - 2, 0) * URL_PENALTY_STEP, 100)
+        await db.execute(text("""
+            UPDATE users SET
+                suspicious_url_attempts = :attempts,
+                suspicious_urls = ARRAY(SELECT DISTINCT unnest(array_append(suspicious_urls, :url))),
+                last_seen = :now
+            WHERE client_id = :client_id
+        """), {
+            "attempts": suspicious_attempts,
+            "url": target_url,
+            "now": now,
+            "client_id": client_id,
+        })
+        await db.commit()
+
+    score += url_score
+
     if score >= 50:
-        # don't auto-enroll new devices here - device registration is explicit (first login only)
-        # only update ip and url so legitimate roaming is tracked without letting
-        # unknown devices silently join the behavioral profile
         await db.execute(text("""
             UPDATE users SET
                 client_ips = ARRAY(SELECT DISTINCT unnest(array_append(client_ips, :ip))),
-                common_urls = ARRAY(SELECT DISTINCT unnest(array_append(common_urls, :url))),
                 last_seen = :now
             WHERE client_id = :client_id
-        """), {"ip": client_ip, "url": target_url, "now": now, "client_id": client_id})
+        """), {"ip": client_ip, "now": now, "client_id": client_id})
         await db.commit()
 
-    return score
-
-
-app = FastAPI()
+    return score, suspicious_attempts, is_suspicious_url
 
 @app.post("/authenticate")
 async def authenticate(request: Request, db: AsyncSession = Depends(get_db)):
@@ -130,7 +160,7 @@ async def authenticate(request: Request, db: AsyncSession = Depends(get_db)):
         raise HTTPException(idp_resp.status_code, idp_resp.json().get("detail", "Authentication failed"))
 
     client_id = idp_resp.json()["client_id"]
-    trust = await score_request(client_ip, target_url, device_id, client_id, db)
+    trust, suspicious_attempts, is_suspicious_url = await score_request(client_ip, target_url, device_id, client_id, db)
 
     if client_verify == "SUCCESS":
         trust += 25
@@ -143,6 +173,15 @@ async def authenticate(request: Request, db: AsyncSession = Depends(get_db)):
         "threshold": TRUST_THRESHOLD,
         "mtls": client_verify,
     })
+
+    if auth_header.startswith("Bearer ") and is_suspicious_url and suspicious_attempts == 1:
+        await send_log_async("access_granted", {
+            "client_id": client_id,
+            "client_ip": client_ip,
+            "device_id": device_id,
+            "score": trust,
+        })
+        return {"status": "authenticated", "client_id": client_id}
 
     if trust < TRUST_THRESHOLD:
         await send_log_async("access_denied", {
@@ -170,6 +209,15 @@ async def authenticate(request: Request, db: AsyncSession = Depends(get_db)):
 
     if auth_header.startswith("Bearer "):
         return {"status": "authenticated", "client_id": client_id}
+
+    now = int(time())
+    await db.execute(text("""
+        UPDATE users SET
+            suspicious_url_attempts = 0,
+            last_seen = :now
+        WHERE client_id = :client_id
+    """), {"now": now, "client_id": client_id})
+    await db.commit()
 
     async with httpx.AsyncClient() as c:
         req_body = await request.json() if body else {}

@@ -105,14 +105,12 @@ def make_client_cert(key, ca_key, ca_cert, cn):
 
 out = Path("web-server-pep/certs")
 
-# new external CA - only used for nginx <-> browser/client trust
 client_ca_key = gen_key()
 client_ca = make_ca(client_ca_key, "Client-CA")
 save_key(client_ca_key, out / "ca.key")
 save_cert(client_ca, out / "ca.pem")
 print("generated: Client-CA  (web-server-pep/certs/ca.pem)")
 
-# nginx server cert - signed by Client-CA so browsers can verify it
 nginx_key = gen_key()
 nginx_cert = make_server_cert(
     nginx_key, client_ca_key, client_ca,
@@ -124,9 +122,6 @@ save_key(nginx_key, out / "key.pem")
 save_cert(nginx_cert, out / "cert.pem")
 print("generated: nginx server cert  (web-server-pep/certs/cert.pem)")
 
-# user-facing client cert - signed by Client-CA
-# nginx trusts Client-CA for client auth -> this cert passes nginx
-# app-service trusts only internal TermProject-CA -> this cert is rejected there
 client_key = gen_key()
 client_cert = make_client_cert(client_key, client_ca_key, client_ca, "test-user-001")
 save_key(client_key, out / "client.key")
